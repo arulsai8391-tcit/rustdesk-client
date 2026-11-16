@@ -190,41 +190,6 @@ jobs:
             Invoke-WebRequest -Uri "$base/removeSetupServerTip.diff" -OutFile removeSetupServerTip.diff
             git apply removeSetupServerTip.diff
 
-      - name: Patch remote printer port to spool file
-        continue-on-error: true
-        shell: python
-        run: |
-          import os, re
-          src = "."
-          app = os.environ.get("appname") or "RustDesk"
-          literal = "C:\\\\ProgramData\\\\%s\\\\printer-spool\\\\job.prn" % app
-          rs = os.path.join(src, "libs", "remote_printer", "src", "lib.rs")
-          if os.path.isfile(rs):
-              with open(rs, "r", encoding="utf-8") as f:
-                  t = f.read()
-              if "printer-spool" not in t:
-                  old = ('fn get_port_name(app_name: &str) -> Vec<u16> {\n'
-                         '    format!("{} Printer", app_name)')
-                  new = ('fn get_port_name(app_name: &str) -> Vec<u16> {\n'
-                         '    let base = std::env::var("ProgramData")\n'
-                         '        .unwrap_or_else(|_| "C:\\\\ProgramData".to_string());\n'
-                         '    let dir = format!("{}\\\\{}\\\\printer-spool", base, app_name);\n'
-                         '    let _ = std::fs::create_dir_all(&dir);\n'
-                         '    format!("{}\\\\job.prn", dir)')
-                  if old in t:
-                      with open(rs, "w", encoding="utf-8") as f:
-                          f.write(t.replace(old, new, 1))
-          cpp = os.path.join(src, "res", "msi", "CustomActions", "RemotePrinter.cpp")
-          if os.path.isfile(cpp):
-              with open(cpp, "r", encoding="utf-8") as f:
-                  t = f.read()
-              if "printer-spool" not in t:
-                  pattern = r'(RD_PRINTER_PORT\s*=\s*)L"[^"]*"'
-                  new_t, n = re.subn(pattern, lambda m: m.group(1) + 'L"%s"' % literal, t, count=1)
-                  if n == 1:
-                      with open(cpp, "w", encoding="utf-8") as f:
-                          f.write(new_t)
-
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v1
         with:
@@ -306,7 +271,7 @@ jobs:
           path: C:\vcpkg\installed
           key: vcpkg-windows-${{ env.VCPKG_COMMIT_ID }}-${{ matrix.job.vcpkg-triplet }}
 
-          - name: Build rustdesk
+      - name: Build rustdesk
         run: |
           python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec ${{ matrix.job.build-args }}
           mv ./flutter/build/windows/x64/runner/Release ./rustdesk
