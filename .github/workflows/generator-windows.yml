@@ -118,7 +118,7 @@ jobs:
         run: |
           import os
           app = "TC RDP"
-          for path in ["res/msi/Bundle.wxs", "res/msi/Package.wxs"]:
+          for path in ["res/msi/Bundle.wxs", "res/msi/Package.wxs", "flutter/windows/runner/Runner.rc"]:
               if os.path.isfile(path):
                   with open(path, "r", encoding="utf-8") as f:
                       t = f.read()
@@ -131,6 +131,13 @@ jobs:
                   t = f.read()
               t = t.replace('pub const APP_NAME: &str = "RustDesk";', f'pub const APP_NAME: &str = "{app}";')
               with open(rs, "w", encoding="utf-8") as f:
+                  f.write(t)
+          win_rs = "src/platform/windows.rs"
+          if os.path.isfile(win_rs):
+              with open(win_rs, "r", encoding="utf-8") as f:
+                  t = f.read()
+              t = t.replace('RustDesk.lnk', f'{app}.lnk')
+              with open(win_rs, "w", encoding="utf-8") as f:
                   f.write(t)
 
       - name: Generate custom icons from custom-logo.png
