@@ -20,8 +20,8 @@ on:
         type: string
 
 env:
-  appname: "TC RDP"
-  filename: "TC-RDP"
+  appname: "TC Remote Support"
+  filename: "TC Remote Support"
   iconlink_url: "false"
   logolink_url: "false"
   SCITER_RUST_VERSION: "1.75"
@@ -113,11 +113,11 @@ jobs:
           sed -i 's#OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=#ruAid6RIyuEI+Pr1ewM50ySKPhPWSbHuOYE6Hv1YEnY=#g' libs/hbb_common/src/config.rs
           sed -i 's#PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("".to_owned())#PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("172.16.100.202".to_owned())#g' libs/hbb_common/src/config.rs
 
-      - name: Apply custom app name (TC RDP)
+      - name: Apply custom app name (TC Remote Support)
         shell: python
         run: |
           import os
-          app = "TC RDP"
+          app = "TC Remote Support"
           for path in ["res/msi/Bundle.wxs", "res/msi/Package.wxs", "flutter/windows/runner/Runner.rc"]:
               if os.path.isfile(path):
                   with open(path, "r", encoding="utf-8") as f:
@@ -338,5 +338,5 @@ jobs:
       - name: Upload Custom Windows Client
         uses: actions/upload-artifact@v7
         with:
-          name: TC-RDP-windows-x64
+          name: TC-Remote-Support-windows-x64
           path: ./SignOutput/*
