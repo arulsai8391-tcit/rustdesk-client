@@ -20,8 +20,8 @@ on:
         type: string
 
 env:
-  appname: "RustDesk"
-  filename: "rustdesk-custom"
+  appname: "TC RDP"
+  filename: "TC-RDP"
   iconlink_url: "false"
   logolink_url: "false"
   SCITER_RUST_VERSION: "1.75"
@@ -80,6 +80,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
 
+      - name: Preserve custom logo
+        shell: bash
+        run: cp custom-logo.png "$RUNNER_TEMP/custom-logo.png"
+
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v6
         with:
@@ -105,9 +109,47 @@ jobs:
       - name: Inject Custom Server Config
         shell: bash
         run: |
-          sed -i 's#rs-ny.rustdesk.com#172.16.100.202#g' libs/hbb_common/src/config.rs
+          sed -i 's#://rustdesk.com#172.16.100.202#g' libs/hbb_common/src/config.rs
           sed -i 's#OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=#ruAid6RIyuEI+Pr1ewM50ySKPhPWSbHuOYE6Hv1YEnY=#g' libs/hbb_common/src/config.rs
           sed -i 's#PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("".to_owned())#PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("172.16.100.202".to_owned())#g' libs/hbb_common/src/config.rs
+
+      - name: Apply custom app name (TC RDP)
+        shell: python
+        run: |
+          import os, glob
+          app = "TC RDP"
+          for path in ["Cargo.toml", "flutter/pubspec.yaml", "res/msi/Bundle.wxs", "res/msi/Package.wxs"]:
+              if os.path.isfile(path):
+                  with open(path, "r", encoding="utf-8") as f:
+                      t = f.read()
+                  t = t.replace("RustDesk", app)
+                  with open(path, "w", encoding="utf-8") as f:
+                      f.write(t)
+          rs = "libs/hbb_common/src/config.rs"
+          if os.path.isfile(rs):
+              with open(rs, "r", encoding="utf-8") as f:
+                  t = f.read()
+              t = t.replace('pub const APP_NAME: &str = "RustDesk";', f'pub const APP_NAME: &str = "{app}";')
+              with open(rs, "w", encoding="utf-8") as f:
+                  f.write(t)
+          for dart in glob.glob("flutter/lib/**/*.dart", recursive=True):
+              with open(dart, "r", encoding="utf-8") as f:
+                  t = f.read()
+              if "RustDesk" in t:
+                  with open(dart, "w", encoding="utf-8") as f:
+                      f.write(t.replace("RustDesk", app))
+
+      - name: Generate custom icons from custom-logo.png
+        shell: pwsh
+        run: |
+          $logo = "$env:RUNNER_TEMP\custom-logo.png"
+          magick $logo -resize 256x256 -define icon:auto-resize=256,128,64,48,32,16 res/icon.ico
+          magick $logo -resize 256x256 -define icon:auto-resize=256,128,64,48,32,16 flutter/windows/runner/resources/app_icon.ico
+          magick $logo -resize 32x32 res/tray-icon.ico
+          magick $logo -resize 32x32 flutter/windows/runner/resources/tray_icon.ico
+          magick $logo -resize 256x256 res/icon.png
+          magick $logo -resize 256x256 flutter/assets/icon.png
+          if (Test-Path "flutter/assets/logo.png") { magick $logo -resize 256x256 flutter/assets/logo.png }
 
       - name: Set custom app version 
         continue-on-error: true
@@ -262,8 +304,9 @@ jobs:
         continue-on-error: true
         with:
           path: C:\vcpkg\installed
-      
-      - name: Build rustdesk
+          key: vcpkg-windows-${{ env.VCPKG_COMMIT_ID }}-${{ matrix.job.vcpkg-triplet }}
+
+          - name: Build rustdesk
         run: |
           python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec ${{ matrix.job.build-args }}
           mv ./flutter/build/windows/x64/runner/Release ./rustdesk
@@ -329,5 +372,5 @@ jobs:
       - name: Upload Custom Windows Client
         uses: actions/upload-artifact@v7
         with:
-          name: rustdesk-custom-windows-x64
+          name: TC-RDP-windows-x64
           path: ./SignOutput/*
