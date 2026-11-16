@@ -118,7 +118,7 @@ jobs:
         run: |
           import os, glob
           app = "TC RDP"
-          for path in ["Cargo.toml", "flutter/pubspec.yaml", "res/msi/Bundle.wxs", "res/msi/Package.wxs"]:
+          for path in ["flutter/pubspec.yaml", "res/msi/Bundle.wxs", "res/msi/Package.wxs"]:
               if os.path.isfile(path):
                   with open(path, "r", encoding="utf-8") as f:
                       t = f.read()
