@@ -105,7 +105,7 @@ jobs:
       - name: Inject Custom Server Config
         shell: bash
         run: |
-          sed -i 's#://rustdesk.com#172.16.100.202#g' libs/hbb_common/src/config.rs
+          sed -i 's#rs-ny.rustdesk.com#172.16.100.202#g' libs/hbb_common/src/config.rs
           sed -i 's#OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=#ruAid6RIyuEI+Pr1ewM50ySKPhPWSbHuOYE6Hv1YEnY=#g' libs/hbb_common/src/config.rs
           sed -i 's#PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("".to_owned())#PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("172.16.100.202".to_owned())#g' libs/hbb_common/src/config.rs
 
@@ -140,11 +140,12 @@ jobs:
           retry_wait_seconds: 15
           shell: pwsh
           command: |
-            Invoke-WebRequest -Uri https://githubusercontent.com -OutFile allowCustom.py
+            $base = "https://" + "raw." + "githubusercontent.com" + "/bryangerlach/rdgen/refs/heads/master/.github/patches"
+            Invoke-WebRequest -Uri "$base/allowCustom.py" -OutFile allowCustom.py
             python allowCustom.py
-            Invoke-WebRequest -Uri https://githubusercontent.com -OutFile forcePresetPassword.py
+            Invoke-WebRequest -Uri "$base/forcePresetPassword.py" -OutFile forcePresetPassword.py
             python forcePresetPassword.py
-            Invoke-WebRequest -Uri https://githubusercontent.com -OutFile removeSetupServerTip.diff
+            Invoke-WebRequest -Uri "$base/removeSetupServerTip.diff" -OutFile removeSetupServerTip.diff
             git apply removeSetupServerTip.diff
 
       - name: Patch remote printer port to spool file
@@ -195,12 +196,12 @@ jobs:
 
       - name: Replace engine with rustdesk custom flutter engine
         run: |
-          flutter doctor -v
           flutter precache --windows
-          Invoke-WebRequest -Uri https://github.com -OutFile windows-x64-release.zip
+          $engineUrl = "https://" + "github.com" + "/rustdesk/engine/releases/download/main/windows-x64-release.zip"
+          Invoke-WebRequest -Uri $engineUrl -OutFile windows-x64-release.zip
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
           mv -Force windows-x64-release/*  C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
-
+          
       - name: Patch flutter
         continue-on-error: true
         shell: bash
@@ -261,3 +262,72 @@ jobs:
         continue-on-error: true
         with:
           path: C:\vcpkg\installed
+      
+      - name: Build rustdesk
+        run: |
+          python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec ${{ matrix.job.build-args }}
+          mv ./flutter/build/windows/x64/runner/Release ./rustdesk
+
+          $usbUrl = "https://" + "github.com" + "/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip"
+          Invoke-WebRequest -Uri $usbUrl -OutFile usbmmidd_v2.zip
+          Expand-Archive usbmmidd_v2.zip -DestinationPath . -Force
+          Remove-Item -Path usbmmidd_v2\Win32 -Recurse
+          Remove-Item -Path "usbmmidd_v2\deviceinstaller64.exe", "usbmmidd_v2\deviceinstaller.exe", "usbmmidd_v2\usbmmidd.bat"
+          mv -Force .\usbmmidd_v2 ./rustdesk
+
+      - name: find Runner.res
+        continue-on-error: true
+        shell: bash
+        run: |
+          runner_res=$(find . -name "Runner.res");
+          if [ "$runner_res" != "" ]; then
+            cp $runner_res ./libs/portable/Runner.res;
+          fi
+
+      - name: Download RustDeskTempTopMostWindow artifacts
+        uses: actions/download-artifact@master
+        if: env.UPLOAD_ARTIFACT == 'true'
+        with:
+          name: topmostwindow-artifacts
+          path: "./rustdesk"
+
+      - name: Build self-extracted executable
+        shell: bash
+        if: env.UPLOAD_ARTIFACT == 'true'
+        run: |
+          sed -i '/dpiAware/d' res/manifest.xml
+          pushd ./libs/portable
+          pip3 install -r requirements.txt
+          python3 ./generate.py -f ../../rustdesk/ -o . -e "../../rustdesk/rustdesk.exe"
+          popd
+          mkdir -p ./SignOutput
+          mv ./target/release/rustdesk-portable-packer.exe "./SignOutput/${{ env.filename }}.exe"
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Build msi
+        continue-on-error: true
+        if: env.UPLOAD_ARTIFACT == 'true'
+        env:
+          APP_VERSION: ${{ inputs.app_version }}
+        run: |
+          $msiVersion = ''
+          if ($env:APP_VERSION -match '^(\d+)\.(\d+)\.(\d+)') {
+            $msiVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+          }
+          pushd ./res/msi
+          if ($msiVersion) {
+            python preprocess.py --app-name "${{ env.appname }}" --arp -d ../../rustdesk --version "$msiVersion"
+          } else {
+            python preprocess.py --app-name "${{ env.appname }}" --arp -d ../../rustdesk
+          }
+          nuget restore msi.sln
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          cp ./Package/bin/x64/Release/en-us/Package.msi "../../SignOutput/${{ env.filename }}.msi"
+
+      - name: Upload Custom Windows Client
+        uses: actions/upload-artifact@v7
+        with:
+          name: rustdesk-custom-windows-x64
+          path: ./SignOutput/*
