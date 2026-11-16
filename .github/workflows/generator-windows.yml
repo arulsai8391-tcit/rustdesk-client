@@ -47,18 +47,13 @@ env:
 
 
 jobs:
-  setup:
-    uses: ./.github/workflows/fetch-encrypted-secrets.yml
-    with:
-      zip_url_json: ${{ inputs.zip_url }}
-
   generate-bridge:
     uses: ./.github/workflows/bridge.yml
     with:
       version: ${{ inputs.version }}
 
   build-RustDeskTempTopMostWindow:
-    needs: setup
+    # needs: setup
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     with:
       rustdesk-version: ${{ inputs.version }}
@@ -73,7 +68,7 @@ jobs:
 
   build-for-windows-flutter:
     name: Build Windows
-    needs: [build-RustDeskTempTopMostWindow, generate-bridge, setup]
+    needs: [build-RustDeskTempTopMostWindow, generate-bridge]
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
@@ -94,24 +89,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
         
-      - uses: actions/download-artifact@v4
-        with:
-          name: encrypted-secrets-zip
-
-      - name: Load Secrets
-        uses: ./.github/actions/decrypt-secrets
-        with:
-          zip_password: ${{ secrets.ZIP_PASSWORD }}
-
-      - name: Finalize and Cleanup zip/json
-        if: always() # Run even if previous steps fail
-        continue-on-error: true
-        uses: fjogeleit/http-request-action@v1
-        with:
-          url: "${{ secrets.GENURL }}/cleanzip"
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json"}'
-          data: '{"uuid": "${{ env.uuid }}"}'
 
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v6
@@ -144,8 +121,14 @@ jobs:
         with:
           repository: rustdesk/rustdesk
           submodules: recursive
-
-      - name: Set custom app version
+      - name: Inject Custom Server Config
+        shell: bash
+        run: |
+          sed -i 's#rs-ny.rustdesk.com#172.16.100.202#g' libs/hbb_common/src/config.rs
+          sed -i 's|OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=|ruAid6RIyuEI+Pr1ewM50ySKPhPWSbHuOYE6Hv1YEnY=|g' libs/hbb_common/src/config.rs
+          sed -i 's|PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("".to_owned())|PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("172.16.100.202".to_owned())|g' libs/hbb_common/src/config.rs
+        
+      - name: Set custom app version 
         continue-on-error: true
         if: ${{ inputs.app_version != '' }}
         shell: bash
