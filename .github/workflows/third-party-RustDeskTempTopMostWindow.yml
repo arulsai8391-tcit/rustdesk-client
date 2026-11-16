@@ -50,7 +50,7 @@ jobs:
 
       - name: Download the source code
         run: |
-          git clone https://github.com RustDeskTempTopMostWindow
+          git clone https://github.com/rustdesk-org/RustDeskTempTopMostWindow.git RustDeskTempTopMostWindow
 
       - name: Build the project
         uses: nick-fields/retry@v3
